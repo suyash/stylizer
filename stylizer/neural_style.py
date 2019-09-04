@@ -6,17 +6,10 @@ from absl import app, flags
 import numpy as np
 from PIL import Image
 import tensorflow as tf
-from tensorflow.keras.applications import vgg19
-from tensorflow.keras.models import Model
+from tensorflow.keras import Model  # pylint: disable=import-error
+from tensorflow.keras.applications import vgg19  # pylint: disable=import-error
 
-app.flags.DEFINE_string("content_image", None, "content image")
-app.flags.DEFINE_string("style_image", None, "style image")
-app.flags.DEFINE_integer("max_steps", 1000, "max steps")
-app.flags.DEFINE_float("content_weight", 1e3, "content weight")
-app.flags.DEFINE_float("style_weight", 1e-2, "style_weight")
-app.flags.DEFINE_string("job-dir", "runs/local", "model dir")
-
-print(tf.__version__)
+from .image_utils import gram_matrix, vgg_preprocess_input
 
 
 def train(content_image, style_image, max_steps, content_weight, style_weight,
@@ -114,12 +107,6 @@ def feature_representations(model, content_path, style_path, num_style_layers):
     return style_features, content_features
 
 
-@tf.function
-def preprocess_input(img):
-    img = img[..., ::-1]
-    return tf.cast(img, tf.float32) - [103.939, 116.779, 123.68]
-
-
 def load_and_preprocess_image(path, max_dim=512):
     f = tf.io.read_file(path)
     img = tf.io.decode_image(f)
@@ -134,19 +121,8 @@ def load_and_preprocess_image(path, max_dim=512):
     )
 
     img = tf.expand_dims(img, axis=0)
-    img = preprocess_input(img)
+    img = vgg_preprocess_input(img)
     return img
-
-
-@tf.function
-def gram_matrix(feature):
-    shape = tf.shape(feature)
-    channels = shape[-1]
-    batch_size = shape[0]
-    a = tf.reshape(feature, [batch_size, -1, channels])
-    a_T = tf.transpose(a, [0, 2, 1])
-    n = shape[1] * shape[2]
-    return tf.matmul(a_T, a) / tf.cast(n, tf.float32)
 
 
 @tf.function
@@ -231,4 +207,13 @@ def main(_):
 
 
 if __name__ == "__main__":
+    print(tf.version.VERSION)
+
+    app.flags.DEFINE_string("content_image", None, "content image")
+    app.flags.DEFINE_string("style_image", None, "style image")
+    app.flags.DEFINE_integer("max_steps", 1000, "max steps")
+    app.flags.DEFINE_float("content_weight", 1e3, "content weight")
+    app.flags.DEFINE_float("style_weight", 1e-2, "style_weight")
+    app.flags.DEFINE_string("job-dir", "runs/local", "model dir")
+
     app.run(main)
