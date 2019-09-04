@@ -28,7 +28,7 @@ def process(B, content, beta=0.9999):
     w = w1 - 4
     B = B[int((h1 - h) / 2):int((h1 - h) / 2 + h),
           int((w1 - w) / 2):int((w1 - w) / 2 + w), :]
-    content = scipy.misc.imresize(content, (h, w))
+    content = np.array(Image.fromarray(content).resize((h, w)))
     B = __replication_padding(B, 2)
     content = __replication_padding(content, 2)
     content = content.astype(np.float64) / 255
@@ -103,8 +103,8 @@ if __name__ == "__main__":
     initImg = sys.argv[1]
     contentImg = sys.argv[2]
 
-    content = scipy.misc.imread(contentImg, mode='RGB')
-    B = scipy.misc.imread(initImg, mode='RGB').astype(np.float64)
+    content = np.asarray(Image.open(contentImg))
+    B = np.asarray(Image.open(initImg)).astype(np.float64)
 
     vals = process(B, content)
     img = Image.fromarray(vals)

@@ -7,40 +7,13 @@ import os
 
 from absl import app, flags
 import tensorflow as tf
-from tensorflow.keras.applications import vgg19
-from tensorflow.keras.layers import Conv2D, Input, Lambda, Layer
-from tensorflow.keras.models import Model
+from tensorflow.keras import Model  # pylint: disable=import-error
+from tensorflow.keras.applications import vgg19  # pylint: disable=import-error
+from tensorflow.keras.layers import Conv2D, Input, Lambda, Layer  # pylint: disable=import-error
 import tensorflow_datasets as tfds
 
-app.flags.DEFINE_integer("decoder", 4, "nth decoder to train")
-app.flags.DEFINE_integer("epochs", 1, "number of epochs")
-app.flags.DEFINE_float("learning_rate", 1e-3, "learning rate")
-app.flags.DEFINE_float("feature_weight", 1e-2, "features weight")
-app.flags.DEFINE_float("pixel_weight", 1.0, "pixel weight")
-app.flags.DEFINE_float("variation_weight", 1e-5, "variation weight")
-app.flags.DEFINE_integer("batch_size", 16, "batch size")
-app.flags.DEFINE_string("tfds_data_dir", "~/tensorflow_datasets",
-                        "tfds data dir")
-app.flags.DEFINE_string("job-dir", "runs/local", "job dir")
-
-
-@tf.function
-def resize(img, min_dim=512):
-    """
-    Scale the image preserving aspect ratio so that the minimum dimension is 512.
-    Then, take a square crop in the middle.
-    """
-    scale = tf.constant(min_dim, dtype=tf.float32) / tf.cast(
-        tf.reduce_min(tf.shape(img)[0:2]), tf.float32)
-    img = tf.image.resize_with_pad(
-        img,
-        tf.cast(tf.round(tf.cast(tf.shape(img)[0], tf.float32) * scale),
-                tf.int32),
-        tf.cast(tf.round(tf.cast(tf.shape(img)[1], tf.float32) * scale),
-                tf.int32),
-    )
-    img = tf.image.resize_image_with_crop_or_pad(img, min_dim, min_dim)
-    return img
+from stylizer.layers import Unpool
+from stylizer.utils import resize_min
 
 
 def build_encoder_1(vgg):
@@ -113,47 +86,6 @@ def build_encoder_2(vgg):
     encoder2.get_layer("block2_conv1").set_weights(
         vgg.get_layer("block2_conv1").get_weights())
     return encoder2
-
-
-class Unpool(Layer):
-    """
-    https://github.com/tensorflow/tensorflow/pull/16885/files
-    """
-    def __init__(self, pool_size, **kwargs):
-        super(Unpool, self).__init__(**kwargs)
-        self.pool_size = pool_size
-
-    def call(self, inp):
-        val, mask = inp
-        shape = tf.shape(val)
-
-        flat_shape = [tf.size(val)]
-        val_ = tf.reshape(val, flat_shape)
-
-        batch_range = tf.reshape(tf.cast(tf.range(shape[0]), tf.int64),
-                                 (shape[0], 1, 1, 1))
-        b = tf.ones_like(mask) * batch_range
-        b = tf.reshape(b, (tf.size(val), 1))
-
-        ind = tf.reshape(mask, (tf.size(val), 1))
-        ind = ind - b * tf.cast(
-            (shape[1] * shape[2] * shape[3] * self.pool_size[0] *
-             self.pool_size[1]), tf.int64)
-        ind = tf.concat([b, ind], axis=1)
-
-        ans = tf.scatter_nd(ind,
-                            val_,
-                            shape=(shape[0], shape[1] * shape[2] * shape[3] *
-                                   self.pool_size[0] * self.pool_size[1]))
-        ans = tf.reshape(ans,
-                         (shape[0], shape[1] * self.pool_size[0],
-                          shape[2] * self.pool_size[1], val.get_shape()[3]))
-        return ans
-
-    def get_config(self):
-        config = super(Unpool, self).get_config()
-        config["pool_size"] = self.pool_size
-        return config
 
 
 def build_decoder_2():
@@ -618,7 +550,7 @@ def main(_):
     data_builder = tfds.builder("coco2014", data_dir=flags.FLAGS.tfds_data_dir)
     dataset = data_builder.as_dataset(split=tfds.Split.TRAIN)
     dataset = dataset.map(lambda i: i["image"])
-    dataset = dataset.map(lambda i: resize(i, 256))
+    dataset = dataset.map(lambda i: resize_min(i, 256))
     dataset = dataset.batch(flags.FLAGS.batch_size)
 
     encoder, decoder = run(job_dir=flags.FLAGS["job-dir"].value,
@@ -644,5 +576,17 @@ def main(_):
 
 
 if __name__ == "__main__":
-    print(tf.__version__)
+    print(tf.version.VERSION)
+
+    app.flags.DEFINE_integer("decoder", 4, "nth decoder to train")
+    app.flags.DEFINE_integer("epochs", 1, "number of epochs")
+    app.flags.DEFINE_float("learning_rate", 1e-3, "learning rate")
+    app.flags.DEFINE_float("feature_weight", 1e-2, "features weight")
+    app.flags.DEFINE_float("pixel_weight", 1.0, "pixel weight")
+    app.flags.DEFINE_float("variation_weight", 1e-5, "variation weight")
+    app.flags.DEFINE_integer("batch_size", 16, "batch size")
+    app.flags.DEFINE_string("tfds_data_dir", "~/tensorflow_datasets",
+                            "tfds data dir")
+    app.flags.DEFINE_string("job-dir", "runs/local", "job dir")
+
     app.run(main)

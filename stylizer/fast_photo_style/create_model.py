@@ -14,40 +14,10 @@ import os
 
 from absl import app, flags
 import tensorflow as tf
-from tensorflow.keras.layers import Input, Lambda
-from tensorflow.keras.models import Model
+from tensorflow.keras import Model  # pylint: disable=import-error
+from tensorflow.keras.layers import Input, Lambda  # pylint: disable=import-error
 
-from trainer.task import Unpool
-
-app.flags.DEFINE_string("encoder_1",
-                        "runs/fast_photo_style_decoder_1_5/export/encoder",
-                        "location of encoder 1 saved model")
-app.flags.DEFINE_string("decoder_1",
-                        "runs/fast_photo_style_decoder_1_5/export/decoder",
-                        "location of decoder 1 saved model")
-
-app.flags.DEFINE_string("encoder_2",
-                        "runs/fast_photo_style_decoder_2_15/export/encoder",
-                        "location of encoder 2 saved model")
-app.flags.DEFINE_string("decoder_2",
-                        "runs/fast_photo_style_decoder_2_15/export/decoder",
-                        "location of decoder 2 saved model")
-
-app.flags.DEFINE_string("encoder_3",
-                        "runs/fast_photo_style_decoder_3_21/export/encoder",
-                        "location of encoder 3 saved model")
-app.flags.DEFINE_string("decoder_3",
-                        "runs/fast_photo_style_decoder_3_21/export/decoder",
-                        "location of decoder 3 saved model")
-
-app.flags.DEFINE_string("encoder_4",
-                        "runs/fast_photo_style_decoder_4_22/export/encoder",
-                        "location of encoder 4 saved model")
-app.flags.DEFINE_string("decoder_4",
-                        "runs/fast_photo_style_decoder_4_22/export/decoder",
-                        "location of decoder 4 saved model")
-
-app.flags.DEFINE_string("export_dir", "runs/local", "job dir")
+from stylizer.layers import Unpool
 
 
 @tf.function
@@ -198,4 +168,35 @@ def main(_):
 
 
 if __name__ == "__main__":
+    print(tf.version.VERSION)
+
+    app.flags.DEFINE_string(
+        "encoder_1", "runs/fast_photo_style_decoder_1_5/export/encoder",
+        "location of encoder 1 saved model")
+    app.flags.DEFINE_string(
+        "decoder_1", "runs/fast_photo_style_decoder_1_5/export/decoder",
+        "location of decoder 1 saved model")
+
+    app.flags.DEFINE_string(
+        "encoder_2", "runs/fast_photo_style_decoder_2_15/export/encoder",
+        "location of encoder 2 saved model")
+    app.flags.DEFINE_string(
+        "decoder_2", "runs/fast_photo_style_decoder_2_15/export/decoder",
+        "location of decoder 2 saved model")
+
+    app.flags.DEFINE_string(
+        "encoder_3", "runs/fast_photo_style_decoder_3_21/export/encoder",
+        "location of encoder 3 saved model")
+    app.flags.DEFINE_string(
+        "decoder_3", "runs/fast_photo_style_decoder_3_21/export/decoder",
+        "location of decoder 3 saved model")
+
+    app.flags.DEFINE_string(
+        "encoder_4", "runs/fast_photo_style_decoder_4_22/export/encoder",
+        "location of encoder 4 saved model")
+    app.flags.DEFINE_string(
+        "decoder_4", "runs/fast_photo_style_decoder_4_22/export/decoder",
+        "location of decoder 4 saved model")
+
+    app.flags.DEFINE_string("export_dir", "runs/local", "job dir")
     app.run(main)
