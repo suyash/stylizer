@@ -13,14 +13,17 @@ import os
 
 from absl import app, flags
 import tensorflow as tf
-from tensorflow.keras.applications import vgg19
-from tensorflow.keras.layers import Input, Lambda
-from tensorflow.keras.models import Model
+from tensorflow.keras import Model  # pylint: disable=import-error
+from tensorflow.keras.applications import vgg19  # pylint: disable=import-error
+from tensorflow.keras.layers import Input, Lambda  # pylint: disable=import-error
 import tensorflow_datasets as tfds
+from tensorflow_addons.layers import InstanceNormalization
 
-from trainer.danbooru2017 import Danbooru2017
-from trainer.generator_pretraining_task import InstanceNormalization, preprocess_generator_input, postprocess_generator_output, preprocess_vgg_input, resize_min
-from trainer.discriminator_pretraining_task import build_discriminator
+from stylizer.datasets import Danbooru2017
+from stylizer.utils import resize_min, vgg_preprocess_input
+
+from .generator_pretraining import preprocess_generator_input, postprocess_generator_output
+from .discriminator_pretraining import build_discriminator
 
 
 @tf.function
@@ -35,19 +38,19 @@ def train_step(generator, discriminator, loss_net, generator_optimizer,
 
         real_output_score = discriminator(real_output, training=True)
         comics_score = discriminator(comics_batch, training=True)
-        comics_edge_blurred_score = discriminator(
-            comics_edge_blurred_batch, training=True)
+        comics_edge_blurred_score = discriminator(comics_edge_blurred_batch,
+                                                  training=True)
 
-        real_content_output = loss_net(
-            preprocess_vgg_input(real_batch), training=False)
-        generated_content_output = loss_net(
-            preprocess_vgg_input(real_output), training=False)
+        real_content_output = loss_net(vgg_preprocess_input(real_batch),
+                                       training=False)
+        generated_content_output = loss_net(vgg_preprocess_input(real_output),
+                                            training=False)
 
         generator_gan_loss = crossentropy(
             y_true=tf.ones_like(real_output_score), y_pred=real_output_score)
 
-        content_loss = content_weight * mae(
-            y_true=real_content_output, y_pred=generated_content_output)
+        content_loss = content_weight * mae(y_true=real_content_output,
+                                            y_pred=generated_content_output)
 
         discriminator_loss_real_output = crossentropy(
             y_true=tf.zeros_like(real_output_score), y_pred=real_output_score)
@@ -132,30 +135,29 @@ def train(real_dataset, comics_dataset, comics_edge_blurred_dataset, generator,
             if step == 1 or step % save_summary_steps == 0:
                 # summaries
 
-                tf.summary.scalar(
-                    "Generator Loss", generator_loss_.result(), step=step)
+                tf.summary.scalar("Generator Loss",
+                                  generator_loss_.result(),
+                                  step=step)
                 generator_loss_.reset_states()
 
-                tf.summary.scalar(
-                    "Discriminator Loss",
-                    discriminator_loss_.result(),
-                    step=step)
+                tf.summary.scalar("Discriminator Loss",
+                                  discriminator_loss_.result(),
+                                  step=step)
                 discriminator_loss_.reset_states()
 
-                tf.summary.scalar(
-                    "Generator GAN Loss",
-                    generator_gan_loss_.result(),
-                    step=step)
+                tf.summary.scalar("Generator GAN Loss",
+                                  generator_gan_loss_.result(),
+                                  step=step)
                 generator_gan_loss_.reset_states()
 
-                tf.summary.scalar(
-                    "Content Loss", content_loss_.result(), step=step)
+                tf.summary.scalar("Content Loss",
+                                  content_loss_.result(),
+                                  step=step)
                 content_loss_.reset_states()
 
-                tf.summary.scalar(
-                    "Discriminator Loss Comic Inputs",
-                    discriminator_loss_comics_.result(),
-                    step=step)
+                tf.summary.scalar("Discriminator Loss Comic Inputs",
+                                  discriminator_loss_comics_.result(),
+                                  step=step)
                 discriminator_loss_comics_.reset_states()
 
                 tf.summary.scalar(
@@ -164,10 +166,9 @@ def train(real_dataset, comics_dataset, comics_edge_blurred_dataset, generator,
                     step=step)
                 discriminator_loss_comics_edge_blurred_.reset_states()
 
-                tf.summary.scalar(
-                    "Discriminator Loss Real Inputs",
-                    discriminator_loss_real_output_.result(),
-                    step=step)
+                tf.summary.scalar("Discriminator Loss Real Inputs",
+                                  discriminator_loss_real_output_.result(),
+                                  step=step)
                 discriminator_loss_real_output_.reset_states()
 
             if step >= max_steps:
@@ -205,18 +206,17 @@ def run(job_dir,
         ]
         loss_net = Model(vgg.input, output_layers, name="loss_net")
 
-        train(
-            real_dataset=real_dataset,
-            comics_dataset=comics_dataset,
-            comics_edge_blurred_dataset=comics_edge_blurred_dataset,
-            generator=generator,
-            discriminator=discriminator,
-            loss_net=loss_net,
-            learning_rate=learning_rate,
-            content_weight=content_weight,
-            max_steps=max_steps,
-            save_summary_steps=save_summary_steps,
-            discriminator_training_interval=discriminator_training_interval)
+        train(real_dataset=real_dataset,
+              comics_dataset=comics_dataset,
+              comics_edge_blurred_dataset=comics_edge_blurred_dataset,
+              generator=generator,
+              discriminator=discriminator,
+              loss_net=loss_net,
+              learning_rate=learning_rate,
+              content_weight=content_weight,
+              max_steps=max_steps,
+              save_summary_steps=save_summary_steps,
+              discriminator_training_interval=discriminator_training_interval)
 
         return generator
 
@@ -237,8 +237,10 @@ def build_cmle_generator(generator):
 
     net = generator(net)
 
-    net = Lambda(lambda t: tf.cast(tf.round(postprocess_generator_output(t)), tf.uint8))(net)
-    net = Lambda(lambda t: tf.expand_dims(tf.io.encode_jpeg(t[0]), 0), name="output_bytes")(net)
+    net = Lambda(lambda t: tf.cast(tf.round(postprocess_generator_output(t)),
+                                   tf.uint8))(net)
+    net = Lambda(lambda t: tf.expand_dims(tf.io.encode_jpeg(t[0]), 0),
+                 name="output_bytes")(net)
 
     return Model(inp, net, name="generator_cmle")
 
@@ -252,12 +254,12 @@ def main(_):
     # repeating since has less items than danbooru (~80000 to ~330000)
     real_dataset = real_dataset.repeat()
 
-    comics_builder = Danbooru2017(
-        config="danbooru-images", data_dir=flags.FLAGS.tfds_data_dir)
+    comics_builder = Danbooru2017(config="danbooru-images",
+                                  data_dir=flags.FLAGS.tfds_data_dir)
     comics_dataset = comics_builder.as_dataset(split=tfds.Split.TRAIN)
     # danbooru images are 512x512 with transparent padding, taking a 256x256 portion in the center
-    comics_dataset = comics_dataset.map(lambda i: tf.cast(
-        tf.image.central_crop(i["image"], 0.5), tf.float32))
+    comics_dataset = comics_dataset.map(
+        lambda i: tf.cast(tf.image.central_crop(i["image"], 0.5), tf.float32))
     comics_dataset = comics_dataset.batch(flags.FLAGS.batch_size)
 
     comics_edge_blurred_builder = Danbooru2017(
@@ -276,25 +278,25 @@ def main(_):
 
     content_layers = ["block4_conv1"]
 
-    generator = run(
-        job_dir=flags.FLAGS["job-dir"].value,
-        generator_dir=flags.FLAGS.generator,
-        discriminator_dir=flags.FLAGS.discriminator,
-        content_layers=content_layers,
-        real_dataset=real_dataset,
-        comics_dataset=comics_dataset,
-        comics_edge_blurred_dataset=comics_edge_blurred_dataset,
-        learning_rate=flags.FLAGS.learning_rate,
-        content_weight=flags.FLAGS.content_weight,
-        max_steps=flags.FLAGS.max_steps,
-        save_summary_steps=flags.FLAGS.save_summary_steps,
-        discriminator_training_interval=flags.FLAGS.
-        discriminator_training_interval)
+    generator = run(job_dir=flags.FLAGS["job-dir"].value,
+                    generator_dir=flags.FLAGS.generator,
+                    discriminator_dir=flags.FLAGS.discriminator,
+                    content_layers=content_layers,
+                    real_dataset=real_dataset,
+                    comics_dataset=comics_dataset,
+                    comics_edge_blurred_dataset=comics_edge_blurred_dataset,
+                    learning_rate=flags.FLAGS.learning_rate,
+                    content_weight=flags.FLAGS.content_weight,
+                    max_steps=flags.FLAGS.max_steps,
+                    save_summary_steps=flags.FLAGS.save_summary_steps,
+                    discriminator_training_interval=flags.FLAGS.
+                    discriminator_training_interval)
 
-    tf.keras.experimental.export_saved_model(
-        generator,
-        os.path.join(flags.FLAGS["job-dir"].value, "export", "generator"),
-        serving_only=False)
+    tf.keras.experimental.export_saved_model(generator,
+                                             os.path.join(
+                                                 flags.FLAGS["job-dir"].value,
+                                                 "export", "generator"),
+                                             serving_only=False)
 
     tf.keras.experimental.export_saved_model(
         generator,
@@ -312,7 +314,7 @@ def main(_):
 
 
 if __name__ == "__main__":
-    print(tf.__version__)
+    print(tf.version.VERSION)
 
     app.flags.DEFINE_integer("batch_size", 4, "batch size")
     app.flags.DEFINE_float("learning_rate", 0.001, "learning rate")
