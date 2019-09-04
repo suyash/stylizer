@@ -20,108 +20,14 @@ import sys
 
 from absl import app, flags
 import tensorflow as tf
-from tensorflow.keras import initializers, regularizers, constraints  # pylint: disable=import-error
 from tensorflow.keras import Model  # pylint: disable=import-error
+from tensorflow.keras import initializers  # pylint: disable=import-error
 from tensorflow.keras.applications import vgg19  # pylint: disable=import-error
 from tensorflow.keras.layers import Activation, Add, Conv2D, Input, Lambda, Layer, SeparableConv2D, UpSampling2D  # pylint: disable=import-error
 import tensorflow_datasets as tfds
 
-app.flags.DEFINE_float("content_weight", 1.0, "content weight")
-app.flags.DEFINE_float("style_weight", 1.0, "style weight")
-app.flags.DEFINE_integer("batch_size", 1, "batch size")
-app.flags.DEFINE_integer("max_steps", 20000, "maximum training steps")
-app.flags.DEFINE_integer("save_summary_steps", 1,
-                         "intervals at which a summary is saved")
-app.flags.DEFINE_float("learning_rate", 0.001, "learning rate")
-app.flags.DEFINE_boolean(
-    "use_depthwise_separable_conv", False,
-    "use depthwise separable convolutions in image transformation net, instead of regular convolutions"
-)
-app.flags.DEFINE_boolean("use_artistic_styles", False, "use artistic styles")
-app.flags.DEFINE_boolean("use_comic_styles", False, "use comic styles")
-app.flags.DEFINE_string("tfds_data_dir", "~/tensorflow_datasets",
-                        "tfds data dir")
-app.flags.DEFINE_string("style_targets_root", "../images/style_targets",
-                        "style targets root")
-app.flags.DEFINE_string("job-dir", "runs/local", "job dir")
-
-
-class ConditionalInstanceNormalization(Layer):
-    """
-    A Conditional Instance Normalization Layer Implementation
-    """
-    def __init__(self,
-                 n_styles,
-                 epsilon=1e-3,
-                 beta_initializer="zeros",
-                 gamma_initializer="ones",
-                 beta_regularizer=None,
-                 gamma_regularizer=None,
-                 beta_constraint=None,
-                 gamma_constraint=None,
-                 **kwargs):
-        super(ConditionalInstanceNormalization, self).__init__(**kwargs)
-
-        self.n_styles = n_styles
-        self.epsilon = epsilon
-        self.beta_initializer = initializers.get(beta_initializer)
-        self.gamma_initializer = initializers.get(gamma_initializer)
-        self.beta_regularizer = regularizers.get(beta_regularizer)
-        self.gamma_regularizer = regularizers.get(gamma_regularizer)
-        self.beta_constraint = constraints.get(beta_constraint)
-        self.gamma_constraint = constraints.get(gamma_constraint)
-
-    def build(self, input_shape):
-        self.gamma = self.add_weight(shape=[self.n_styles, input_shape[0][-1]],
-                                     name="gamma",
-                                     initializer=self.gamma_initializer,
-                                     regularizer=self.gamma_regularizer,
-                                     constraint=self.gamma_constraint)
-
-        self.beta = self.add_weight(shape=[self.n_styles, input_shape[0][-1]],
-                                    name="beta",
-                                    initializer=self.beta_initializer,
-                                    regularizer=self.beta_regularizer,
-                                    constraint=self.beta_constraint)
-
-    def call(self, inputs):
-        """
-        inputs:
-            image: incoming activation
-            styles: a __column__ tensor (i.e. [N, 1]) of weights for individual styles.
-
-        first normalizes the input image,
-        and then multiplies it with a weighted sum of the gamma and beta parameters
-        """
-
-        image, style_weights = inputs
-
-        mu, sigma_sq = tf.nn.moments(image, axes=[1, 2], keepdims=True)
-        normalized = (image - mu) / tf.sqrt(sigma_sq + self.epsilon)
-
-        gamma = tf.expand_dims(style_weights, -1) * self.gamma
-        beta = tf.expand_dims(style_weights, -1) * self.beta
-
-        gamma = tf.reduce_sum(gamma, axis=1)
-        beta = tf.reduce_sum(beta, axis=1)
-
-        gamma = tf.expand_dims(tf.expand_dims(gamma, axis=1), axis=1)
-        beta = tf.expand_dims(tf.expand_dims(beta, axis=1), axis=1)
-
-        return gamma * normalized + beta
-
-    def get_config(self):
-        base_config = super(ConditionalInstanceNormalization,
-                            self).get_config()
-        base_config["n_styles"] = self.n_styles
-        base_config["epsilon"] = self.epsilon
-        base_config["beta_initializer"] = self.beta_initializer
-        base_config["gamma_initializer"] = self.gamma_initializer
-        base_config["beta_regularizer"] = self.beta_regularizer
-        base_config["gamma_regularizer"] = self.gamma_regularizer
-        base_config["beta_constraint"] = self.beta_constraint
-        base_config["gamma_constraint"] = self.gamma_constraint
-        return base_config
+from .image_utils import gram_matrix, resize_min, vgg_preprocess_input
+from .normalization import ConditionalInstanceNormalization
 
 
 def conv_block(net, style_weights, filters, kernel_size, strides, activation,
@@ -323,36 +229,6 @@ def build_transformation_network(n_styles, depthwise_separable_conv):
 
 
 @tf.function
-def resize_min(img, min_dim=512):
-    """
-    Scale the image preserving aspect ratio so that the minimum dimension is `min_dim`.
-    Then, take a square crop in the middle to get a `min_dim` x `min_dim` image.
-    """
-    scale = tf.constant(min_dim, dtype=tf.float32) / tf.cast(
-        tf.reduce_min(tf.shape(img)[0:2]), tf.float32)
-    img = tf.image.resize_with_pad(
-        img,
-        tf.cast(tf.round(tf.cast(tf.shape(img)[0], tf.float32) * scale),
-                tf.int32),
-        tf.cast(tf.round(tf.cast(tf.shape(img)[1], tf.float32) * scale),
-                tf.int32),
-    )
-    img = tf.image.resize_image_with_crop_or_pad(img, min_dim, min_dim)
-    return img
-
-
-@tf.function
-def preprocess_input(img):
-    """
-    VGG19 preprocessing steps for an image
-    RGB -> BGR
-    followed by normalization
-    """
-    img = img[..., ::-1]
-    return tf.cast(img, tf.float32) - [103.939, 116.779, 123.68]
-
-
-@tf.function
 def load_and_preprocess_image(path, max_dim=512):
     """
     load an image from the specified path
@@ -364,22 +240,8 @@ def load_and_preprocess_image(path, max_dim=512):
     img = tf.io.decode_image(f)
     img = resize_min(img, max_dim)
     img = tf.expand_dims(img, axis=0)
-    img = preprocess_input(img)
+    img = vgg_preprocess_input(img)
     return img
-
-
-@tf.function
-def gram_matrix(feature):
-    """
-    https://github.com/tensorflow/magenta/blob/master/magenta/models/image_stylization/learning.py#L196
-    """
-    shape = tf.shape(feature)
-    channels = shape[-1]
-    batch_size = shape[0]
-    a = tf.reshape(feature, [batch_size, -1, channels])
-    a_T = tf.transpose(a, [0, 2, 1])
-    n = shape[1] * shape[2]
-    return tf.matmul(a_T, a) / tf.cast(n, tf.float32)
 
 
 @tf.function
@@ -413,7 +275,7 @@ def train_step(batch, n_styles, style_layers, style_features, style_weight,
 
         predictions = transform_net([batch, style_inputs])
 
-        predictions = preprocess_input(predictions)
+        predictions = vgg_preprocess_input(predictions)
 
         output_features = loss_net(predictions)
 
@@ -683,4 +545,25 @@ def main(_):
 
 if __name__ == "__main__":
     print(tf.version.VERSION)
+
+    app.flags.DEFINE_float("content_weight", 1.0, "content weight")
+    app.flags.DEFINE_float("style_weight", 1.0, "style weight")
+    app.flags.DEFINE_integer("batch_size", 1, "batch size")
+    app.flags.DEFINE_integer("max_steps", 20000, "maximum training steps")
+    app.flags.DEFINE_integer("save_summary_steps", 1,
+                             "intervals at which a summary is saved")
+    app.flags.DEFINE_float("learning_rate", 0.001, "learning rate")
+    app.flags.DEFINE_boolean(
+        "use_depthwise_separable_conv", False,
+        "use depthwise separable convolutions in image transformation net, instead of regular convolutions"
+    )
+    app.flags.DEFINE_boolean("use_artistic_styles", False,
+                             "use artistic styles")
+    app.flags.DEFINE_boolean("use_comic_styles", False, "use comic styles")
+    app.flags.DEFINE_string("tfds_data_dir", "~/tensorflow_datasets",
+                            "tfds data dir")
+    app.flags.DEFINE_string("style_targets_root", "../images/style_targets",
+                            "style targets root")
+    app.flags.DEFINE_string("job-dir", "runs/local", "job dir")
+
     app.run(main)
