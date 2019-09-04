@@ -1,0 +1,5 @@
+trainingInput:
+  scaleTier: CUSTOM
+  masterType: standard_v100
+  runtimeVersion: "1.13"
+  pythonVersion: "3.5"
