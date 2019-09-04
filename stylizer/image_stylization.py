@@ -26,8 +26,8 @@ from tensorflow.keras.applications import vgg19  # pylint: disable=import-error
 from tensorflow.keras.layers import Activation, Add, Conv2D, Input, Lambda, Layer, SeparableConv2D, UpSampling2D  # pylint: disable=import-error
 import tensorflow_datasets as tfds
 
-from .image_utils import gram_matrix, resize_min, vgg_preprocess_input
-from .normalization import ConditionalInstanceNormalization
+from .layers import ConditionalInstanceNormalization
+from .utils import gram_matrix, resize_min, vgg_preprocess_input
 
 
 def conv_block(net, style_weights, filters, kernel_size, strides, activation,

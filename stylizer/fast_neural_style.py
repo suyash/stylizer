@@ -14,7 +14,7 @@ from tensorflow.keras.layers import Activation, Add, Conv2D, Conv2DTranspose, In
 from tensorflow_addons.layers import InstanceNormalization
 import tensorflow_datasets as tfds
 
-from .image_utils import gram_matrix, resize_min, vgg_preprocess_input
+from .utils import gram_matrix, resize_min, vgg_preprocess_input
 
 
 def _conv_block(net, filters, kernel_size, strides, padding, activation):

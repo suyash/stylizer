@@ -9,7 +9,7 @@ import tensorflow as tf
 from tensorflow.keras import Model  # pylint: disable=import-error
 from tensorflow.keras.applications import vgg19  # pylint: disable=import-error
 
-from .image_utils import gram_matrix, vgg_preprocess_input
+from .utils import gram_matrix, vgg_preprocess_input
 
 
 def train(content_image, style_image, max_steps, content_weight, style_weight,
