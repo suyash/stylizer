@@ -21,11 +21,3 @@ Once a serving compatible saved_model is available, it can be saved and deployed
 Styling different sections/regions differently using semantic label maps (manual or automatic) is also not implemented.
 
 `tf.nn.max_pool_with_argmax` is used instead of the keras `MaxPool2D` layer to create pooling masks, and fed into a custom `Unpool` layer.
-
-The decoders seem to be ass, especially at levels 3 and 4 (see `decoder_demo.ipynb` notebook).
-
-Another caveat is that Google CMLE is running python 3.5, and there is some issue in keras where models saved in 3.5 don't load in 3.6. See the environment_35 file in the root of this repo to create and work in a python 3.5 env.
-
-## References
-
-- https://github.com/NVIDIA/FastPhotoStyle
