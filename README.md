@@ -14,7 +14,7 @@ The code for the web service is in [stylizer-web](https://github.com/suyash/styl
 >
 > __CODE:__ https://github.com/suyash/stylizer/blob/master/stylizer/image_stylization.py
 >
-> __DEMO:__ https://github.com/suyash/stylizer/blob/master/image_stylization_demo.ipynb
+> __DEMO:__ https://colab.research.google.com/github/suyash/stylizer/blob/master/image_stylization_demo.ipynb
 
 #### Comixify: Transform Video into A Comics
 
@@ -24,7 +24,7 @@ The code for the web service is in [stylizer-web](https://github.com/suyash/styl
 >
 > __CODE:__ https://github.com/suyash/stylizer/tree/master/stylizer/comixgan
 >
-> __DEMO:__ https://github.com/suyash/stylizer/blob/master/comixgan_demo.ipynb
+> __DEMO:__ https://colab.research.google.com/github/suyash/stylizer/blob/master/comixgan_demo.ipynb
 
 #### A Closed-Form Solution to Photorealistic Image Stylization
 
@@ -38,7 +38,7 @@ The code for the web service is in [stylizer-web](https://github.com/suyash/styl
 >
 > __CODE:__ https://github.com/suyash/stylizer/blob/master/stylizer/fast_neural_style.py
 >
-> __DEMO:__ https://github.com/suyash/stylizer/blob/master/fast_neural_style_demo.ipynb
+> __DEMO:__ https://colab.research.google.com/github/suyash/stylizer/blob/master/fast_neural_style_demo.ipynb
 
 #### A Neural Algorithm of Artistic Style
 
