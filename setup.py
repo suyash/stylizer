@@ -1,7 +1,7 @@
 from setuptools import find_packages
 from setuptools import setup
 
-REQUIRED_PACKAGES = ["tensorflow-gpu==2.0.0a0", "tensorflow-datasets==1.0.1"]
+REQUIRED_PACKAGES = ["tensorflow-gpu==2.12.0", "tensorflow-datasets==1.0.1"]
 
 setup(
     name="trainer",
